@@ -35,8 +35,8 @@ class Shoeboxedlib {
 		$this->apikey = $this->CI->config->item('shoeboxed_key');
 		$this->appname = $this->CI->config->item('shoeboxed_appname');
 		$this->callback = $this->CI->config->item('shoeboxed_callback'); 
-		$this->datestart = date('Y-n-d', strtotime("-3 Year")) . 'T00:00:10';
-		$this->dateend = date('Y-n-d', strtotime("+1 Day")) . 'T00:00:10';
+		$this->datestart = date('Y-m-d', strtotime("-3 Year")) . 'T00:00:10';
+		$this->dateend = date('Y-m-d', strtotime("+1 Day")) . 'T00:00:10';
 	}
 
 	//
