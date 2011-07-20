@@ -1,8 +1,10 @@
-<?php 
-class Shoeboxed extends Controller
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class Shoeboxed extends CI_Controller
 {
-	function Shoeboxed() {
-		parent::Controller();
+	function __construct() 
+	{
+		parent::__construct();
 		$this->load->library('Shoeboxedlib');
 		$this->load->library('session');
 	}

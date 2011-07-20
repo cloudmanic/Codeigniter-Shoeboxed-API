@@ -2,9 +2,10 @@
 //
 // By: Cloudmanic Labs, LLC (http://www.cloudmanic.com)
 // Date: 4/1/2010
-// Contact: Spicer Matthews <spicer@cloudmanic.com>
+// Contact: admin@cloudmanic.com
 //
-class Shoeboxedlib {
+class Shoeboxedlib 
+{
 	public $appname;
 	public $apikey;
 	public $usertoken;
@@ -26,7 +27,7 @@ class Shoeboxedlib {
 	// 
 	// Make sure we have a token and set the vars we need.
 	//
-	function Shoeboxedlib()
+	function __construct()
 	{
 		$this->CI =& get_instance();
 		$this->CI->config->load('shoeboxed');
@@ -35,8 +36,8 @@ class Shoeboxedlib {
 		$this->apikey = $this->CI->config->item('shoeboxed_key');
 		$this->appname = $this->CI->config->item('shoeboxed_appname');
 		$this->callback = $this->CI->config->item('shoeboxed_callback'); 
-		$this->datestart = date('Y-m-d', strtotime("-3 Year")) . 'T00:00:10';
-		$this->dateend = date('Y-m-d', strtotime("+1 Day")) . 'T00:00:10';
+		$this->datestart = date('Y-m-d', strtotime("-3 Year"))  . 'T00:00:10';
+		$this->dateend = date('Y-m-d', strtotime("+1 Day"))  . 'T00:00:10';
 	}
 
 	//
@@ -53,9 +54,12 @@ class Shoeboxedlib {
 	function getLoginUrl()
 	{
 		if(isset($this->apikey))
+		{
 			return $this->url . '?appname=' . $this->appname . '&appurl=' . $this->callback . '&apparams=done&SignIn=1';
-		else 
+		} else
+		{ 
 			return 0;
+		}
 	}
 	
 	//
@@ -74,8 +78,13 @@ class Shoeboxedlib {
 	function getCategories()
 	{
 		$this->action = 'GetCategoryCall';
-		$this->request();
-		return $this->_categoryProcess(); 
+		
+		if($this->request())
+		{
+			return $this->_categoryProcess(); 
+		}
+		
+		return 0;
 	}
 	
 	//
@@ -139,49 +148,66 @@ class Shoeboxedlib {
 	//
 	private function request()
 	{	
-		$this->results = array();	
-		$xml = '<?xml version="1.0" encoding="UTF-8"?>
-						<Request xmlns="urn:sbx:apis:SbxBaseComponents">
+		// Clear variables
+		$this->errormsgs = array();
+		$this->results = array();
+		$this->parsedresponse = array();
+		$this->response = array();	
+		
+		$xml = '<Request xmlns="urn:sbx:apis:SbxBaseComponents">
 							<RequesterCredentials>
       					<ApiUserToken>' . $this->apikey . '</ApiUserToken>          
       					<SbxUserToken>' . $this->usertoken . '</SbxUserToken>
 							</RequesterCredentials>';
+		
 		$xml .= '<' . $this->action . '>';
-		$xml .=	'<ReceiptFilter>';
-    $xml .= "<Results>" . $this->count . "</Results>";
-		$xml .= '<PageNo>' . $this->page . '</PageNo>';
 		
-		if(! empty($this->datestart))
-    	$xml .= '<DateStart>' . $this->datestart . '</DateStart>';
-    
-    $xml .= '<DateEnd>' . $this->dateend . '</DateEnd>';
-		
-		if(isset($this->useselldate))
-			$xml .= "<UseSellDate>$this->useselldate</UseSellDate>";		
-		else 
-			$xml .= '<UseSellDate>false</UseSellDate>'; 
-		
-		if(isset($this->catid))
-			$xml .= '<Category>' . $this->catid . '</Category>';
-		
- 		$xml .=	'</ReceiptFilter>';
+		// We only did this xml for certain requests.
+		if($this->action == 'GetReceiptCall')
+		{
+			$xml .=	'<ReceiptFilter>';
+	    $xml .= "<Results>" . $this->count . "</Results>";
+			$xml .= '<PageNo>' . $this->page . '</PageNo>';
+			
+			if(! empty($this->datestart))
+			{
+	    	$xml .= '<DateStart>' . $this->datestart . '</DateStart>';
+	    }
+	    
+	    $xml .= '<DateEnd>' . $this->dateend . '</DateEnd>';
+			
+			if(isset($this->useselldate))
+			{
+				$xml .= "<UseSellDate>$this->useselldate</UseSellDate>";		
+			} else
+			{ 
+				$xml .= '<UseSellDate>false</UseSellDate>'; 
+			}
+			
+			if(isset($this->catid))
+			{
+				$xml .= '<Category>' . $this->catid . '</Category>';
+			}
+			
+	 		$xml .=	'</ReceiptFilter>';
+		}
+	
 		$xml .= '</' . $this->action . '>';
 		$xml .=	'</Request>';
+
+		// Send request and process it.
+		$this->response = $this->http_post($this->requesturl,  array('xml' => $xml));
 		
-		$ch = curl_init();
-		curl_setopt($ch, CURLOPT_URL, $this->requesturl);
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-		curl_setopt($ch, CURLOPT_POST, 1);
-		curl_setopt($ch, CURLOPT_POSTFIELDS, array('xml' => $xml));
-		$this->response = curl_exec($ch);
-		curl_close($ch);
-		
-		if(! $this->_parse_response())
+		if((! empty($this->response['content'])) && 
+				(isset($this->response['headers'][0])) &&
+				(strtoupper($this->response['headers'][0]) == 'HTTP/1.1 200 OK'))
+		{
+			return $this->_parse_response();
+		} else
+		{
+			log_message('level', 'Shoeboxed Lib: error on shoeboxed response.');
 			return 0;
-		else
-			return $this->response;
+		}
 	}
 	
 	//
@@ -190,23 +216,64 @@ class Shoeboxedlib {
 	private function _receiptsProcess()
 	{
 		$data = array();
-		
-		if(isset($this->parsedresponse->Receipts->Receipt)) {
-			$data['count'] = current($this->parsedresponse->Receipts->attributes()->count); 
 			
-			foreach($this->parsedresponse->Receipts->Receipt AS $key => $row)
+		if(isset($this->parsedresponse['Receipts']['Receipt'])) 
+		{
+			// What is the count of the returned data.
+			if(isset($this->parsedresponse['Receipts']['@attributes']['count']))
+			{
+				$data['count'] = $this->parsedresponse['Receipts']['@attributes']['count']; 
+			} else 
+			{
+				$data['count'] = '';
+			}
+
+			// Loop through the data and translate.			
+			foreach($this->parsedresponse['Receipts']['Receipt'] AS $key => $row)
 			{
 				$rec = array();
 				
 				// Get receipt info.
-				foreach($row->attributes() AS $key2 => $row2)
-					$rec[$key2] = current($row2);
+				foreach($row['@attributes'] AS $key2 => $row2)
+				{
+					$rec[$key2] = trim($row2);
+				}
 					
 				// Get category info.
 				$rec['categories'] = array();
-				foreach($row->Categories->Category AS $key2 => $row2)
-					$rec['categories'][] = array('name' => current($row2->attributes()->name), 
-													'id' => current($row2->attributes()->id));
+				if(isset($row['Categories']['Category']))
+				{
+					if(isset($row['Categories']['Category']['@attributes']['name']))
+					{
+						$rec['categories'][] = array('name' => $row['Categories']['Category']['@attributes']['name'], 
+																					'id' => $row['Categories']['Category']['@attributes']['id']);	
+					} else 
+					{
+						foreach($row['Categories']['Category'] AS $key2 => $row2)
+						{
+							$rec['categories'][] = array('name' => $row2['@attributes']['name'], 
+																						'id' => $row2['@attributes']['id']);
+						}
+					}
+				}
+
+				// Get images
+				$rec['images'] = array();
+				if(isset($row['Images']['Image']))
+				{
+					if(isset($row['Images']['Image']['@attributes']['imgurl']))
+					{
+						$rec['images'][] = array('imgurl' => $row['Images']['Image']['@attributes']['imgurl'], 
+																			'index' => $row['Images']['Image']['@attributes']['index']);
+					} else 
+					{
+						foreach($row['Images']['Image'] AS $key2 => $row2)
+						{
+							$rec['images'][] = array('imgurl' => $row2['@attributes']['imgurl'], 
+																					'index' => $row2['@attributes']['index']);
+						}
+					}
+				}
 					
 				$data['receipts'][] = $rec;
 			}
@@ -221,27 +288,34 @@ class Shoeboxedlib {
 	private function _categoryProcess()
 	{
 		$data = array();
-		if(isset($this->parsedresponse->Categories->Category)) {
-			foreach($this->parsedresponse->Categories->Category AS $key => $row)
-				$data[] = array('id' => current($row->attributes()->id), 'name' => current($row->attributes()->name));
+		
+		if(isset($this->parsedresponse['Categories']['Category'])) 
+		{
+			foreach($this->parsedresponse['Categories']['Category'] AS $key => $row)
+			{
+				$data[] = array('id' => $row['@attributes']['id'], 'name' => $row['@attributes']['name']);
+			}
 		}
+
 		return $data;
 	}
 	
 	//
-	// Function to parse the api response
-	// The code uses SimpleXML. http://us.php.net/manual/en/book.simplexml.php 
-	// There are also other ways to parse xml in PHP depending on the version and what is installed.
+	// Parse the returned xml and put it into an array we can work with.
 	//
 	private function _parse_response()
-	{
-		$this->parsedresponse = simplexml_load_string($this->response, "SimpleXMLElement", LIBXML_NOWARNING);
-		
-		if($this->parsedresponse->attributes()->code != 0) { 
-			$this->errormsgs = array('code' => htmlspecialchars($this->parsedresponse->attributes()->code), 
-														'msg' => htmlspecialchars($this->parsedresponse->attributes()->description));
+	{		
+		$this->parsedresponse = json_decode(json_encode((array) simplexml_load_string($this->response['content'])),1);
+
+		// See if the shoeboxed return an error.
+		if(isset($this->parsedresponse['@attributes']['code']) && 
+				($this->parsedresponse['@attributes']['code'] != 0))
+		{
+			$this->errormsgs = array('code' => $this->parsedresponse['@attributes']['code'], 
+															'msg' => $this->parsedresponse['@attributes']['description']);
 			return 0;
 		}
+		
 		return 1;
 	}
 	
@@ -252,5 +326,19 @@ class Shoeboxedlib {
 	{
 		return $this->errormsgs;
 	}
+	
+	//
+	// Make a http post request to the shoeboxed.com servers.
+	//
+	function http_post($url, $data)
+	{
+		$data_url = http_build_query($data);
+		$data_len = strlen($data_url);
+
+		return array('content' => file_get_contents($url, false, stream_context_create(array('http'=>array('method' => 'POST', 
+															'header' => "Connection: close\r\nContent-Length: $data_len\r\n" . "Content-type: application/x-www-form-urlencoded\r\n", 
+															'content' => $data_url)))), 'headers' => $http_response_header);
+	}
 }
-?>
+
+/* End File */
